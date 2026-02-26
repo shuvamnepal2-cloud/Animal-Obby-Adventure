@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Animal Obby Adventure</title>
+
+  <!-- Add your favicon -->
+  <link rel="icon" type="image/png" href="Cheerful cat in sunny garden.png">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial;
+      background: #87ceeb;
+      text-align: center;
+    }
+    canvas {
+      background: #cceeff;
+      display: none;
+      margin: auto;
+      border: 2px solid black;
+    }
+    .menu {
+      padding-top: 70px;
+    }
+    button {
+      padding: 12px 22px;
+      font-size: 17px;
+      margin: 6px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<!-- HOME -->
+<div id="home" class="menu">
+  <h1>🐾 Animal Obby Adventure</h1>
+  <button onclick="startGame()">▶ Start Game</button><br>
+  <button onclick="openShop()">🛒 Skin Shop</button>
+</div>
+
+<!-- SHOP -->
+<div id="shop" class="menu" style="display:none;">
+  <h2>🛒 Skin Shop</h2>
+  <button onclick="setSkin('🐱')">🐱</button>
+  <button onclick="setSkin('🐶')">🐶</button>
+  <button onclick="setSkin('🐸')">🐸</button>
+  <button onclick="setSkin('🐵')">🐵</button>
+  <button onclick="setSkin('🦊')">🦊</button>
+  <button onclick="setSkin('🐼')">🐼</button>
+  <button onclick="setSkin('🦁')">🦁</button>
+  <button onclick="setSkin('🐯')">🐯</button>
+  <button onclick="setSkin('🐮')">🐮</button>
+  <button onclick="setSkin('🐰')">🐰</button><br><br>
+  <button onclick="goHome()">⬅ Back</button>
+</div>
+
+<!-- RESTART -->
+<div id="restart" class="menu" style="display:none;">
+  <h2>💥 Restart?</h2>
+  <button onclick="restartLevel()">🔄 Restart Level</button><br>
+  <button onclick="goHome()">🏠 Main Menu</button>
+</div>
+
+<!-- COMPLETE -->
+<div id="complete" class="menu" style="display:none;">
+  <h2>✨ Level Complete!</h2>
+  <button onclick="nextLevel()">➡ Next Level</button>
+</div>
+
+<canvas id="game" width="800" height="350"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let screen = "home";
+let level = 1;
+let maxLevel = 100;
+let skin = "🐱";
+let cameraX = 0;
+
+let timeLeft = 15;
+let lastTime = Date.now();
+
+const keys = {};
+
+const player = {
+  x: 50,
+  y: 80,
+  w: 30,
+  h: 30,
+  dy: 0,
+  onGround: false
+};
+
+const gravity = 0.6;
+const jumpPower = -9.8;
+const speed = 3.6;
+
+let platforms = [];
+let portal = {};
+let boost = null;
+
+// ✅ SPAWN PLATFORM
+let spawnPlatform = { x: 20, y: 250, w: 120, h: 12 };
+
+// GENERATE HARDER LEVELS
+function loadLevel(lv) {
+  player.x = spawnPlatform.x + 20;
+  player.y = spawnPlatform.y - player.h;
+  player.dy = 0;
+
+  timeLeft = Math.max(6, 16 - Math.floor(lv / 5));
+
+  platforms = [];
+
+  platforms.push(spawnPlatform);
+
+  let x = 200;
+  let gap = Math.max(70, 140 - lv);
+  let width = Math.max(40, 90 - lv);
+
+  for (let i = 0; i < 7 + lv; i++) {
+    platforms.push({
+      x: x,
+      y: 240 - (i % 3) * 35,
+      w: width,
+      h: 10
+    });
+    x += gap;
+  }
+
+  portal = { x: x + 60, y: 190, w: 40, h: 70 };
+
+  boost = Math.random() < 0.6 ? {
+    x: platforms[Math.floor(platforms.length / 2)].x + 20,
+    y: 160,
+    r: 12
+  } : null;
+}
+
+window.addEventListener("keydown", e => keys[e.key] = true);
+window.addEventListener("keyup", e => keys[e.key] = false);
+
+function update() {
+  let now = Date.now();
+  if (now - lastTime >= 1000) {
+    timeLeft--;
+    lastTime = now;
+    if (timeLeft <= 0) failLevel();
+  }
+
+  if (keys["ArrowRight"]) player.x += speed;
+  if (keys["ArrowLeft"]) player.x -= speed;
+
+  if (keys["ArrowUp"] && player.onGround) {
+    player.dy = jumpPower;
+    player.onGround = false;
+  }
+
+  player.dy += gravity;
+  player.y += player.dy;
+  player.onGround = false;
+
+  platforms.forEach(p => {
+    if (
+      player.x < p.x + p.w &&
+      player.x + player.w > p.x &&
+      player.y + player.h <= p.y + 10 &&
+      player.y + player.h + player.dy >= p.y
+    ) {
+      player.y = p.y - player.h;
+      player.dy = 0;
+      player.onGround = true;
+    }
+  });
+
+  if (player.y > spawnPlatform.y + 100) {
+    failLevel();
+  }
+
+  if (boost && Math.hypot(player.x - boost.x, player.y - boost.y) < 25) {
+    timeLeft += 2;
+    boost = null;
+  }
+
+  if (
+    player.x < portal.x + portal.w &&
+    player.x + player.w > portal.x &&
+    player.y < portal.y + portal.h &&
+    player.y + player.h > portal.y
+  ) {
+    finishLevel();
+  }
+
+  cameraX = player.x - canvas.width / 2;
+}
+
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();
+  ctx.translate(-cameraX,0);
+
+  platforms.forEach((p, i) => {
+    ctx.fillStyle = (i === 0) ? "green" : "brown";
+    ctx.fillRect(p.x, p.y, p.w, p.h);
+    if(i === 0) ctx.fillStyle = "white"; ctx.fillText("SPAWN", p.x + 20, p.y - 5);
+  });
+
+  ctx.fillStyle = "purple";
+  ctx.fillRect(portal.x, portal.y, portal.w, portal.h);
+  ctx.fillText("🌀", portal.x + 8, portal.y + 45);
+
+  if (boost) {
+    ctx.fillStyle = "gold";
+    ctx.beginPath();
+    ctx.arc(boost.x, boost.y, boost.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillText("+2", boost.x - 10, boost.y + 5);
+  }
+
+  ctx.font = "30px Arial";
+  ctx.fillText(skin, player.x, player.y + 30);
+
+  ctx.restore();
+
+  ctx.fillStyle = "black";
+  ctx.fillText(`Level: ${level}/100`, 10, 20);
+  ctx.fillText(`Time: ${timeLeft}s`, 10, 40);
+}
+
+function gameLoop() {
+  if (screen === "game") {
+    update();
+    draw();
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+function startGame() {
+  level = 1;
+  screen = "game";
+  hideAll();
+  canvas.style.display = "block";
+  loadLevel(level);
+}
+
+function nextLevel() {
+  if (level < maxLevel) level++;
+  hideAll();
+  canvas.style.display = "block";
+  screen = "game";
+  loadLevel(level);
+}
+
+function restartLevel() {
+  hideAll();
+  canvas.style.display = "block";
+  screen = "game";
+  loadLevel(level);
+}
+
+function finishLevel() {
+  screen = "complete";
+  hideAll();
+  document.getElementById("complete").style.display = "block";
+}
+
+function failLevel() {
+  screen = "restart";
+  hideAll();
+  document.getElementById("restart").style.display = "block";
+}
+
+function openShop() {
+  hideAll();
+  document.getElementById("shop").style.display = "block";
+}
+
+function goHome() {
+  screen = "home";
+  hideAll();
+  document.getElementById("home").style.display = "block";
+}
+
+function setSkin(s) {
+  skin = s;
+}
+
+function hideAll() {
+  canvas.style.display = "none";
+  ["home","shop","restart","complete"].forEach(id=>{
+    document.getElementById(id).style.display="none";
+  });
+}
+
+gameLoop();
+</script>
+
+</body>
+</html>
